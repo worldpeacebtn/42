@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
+    <title>Holodeck Web 4.2 - Fluid Particle Utopia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #020205;
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            -webkit-user-select: none; -moz-user-select: none; user-select: none;
+        }
+        #canvas-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+        }
+        #hud-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            pointer-events: none;
+            display: none;
+            box-shadow: inset 0 0 50px rgba(6, 182, 212, 0.2);
+            border: 2px solid rgba(6, 182, 212, 0.1);
+        }
+        .hud-font { font-family: 'Orbitron', sans-serif; }
+
+        /* Reticle */
+        #reticle {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 30px; height: 30px;
+            border: 2px solid rgba(6, 182, 212, 0.6);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        #reticle.active {
+            border-color: rgba(217, 70, 239, 0.9);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 15px rgba(217, 70, 239, 0.8);
+        }
+        #reticle::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 4px; height: 4px; background: #fff; border-radius: 50%;
+        }
+
+        /* Scan Info */
+        #scan-info {
+            position: absolute; top: 60%; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+            border-left: 3px solid #0ff; padding: 15px; border-radius: 0 8px 8px 0;
+            color: white; opacity: 0; transition: opacity 0.3s;
+            max-width: 400px; text-align: center;
+        }
+
+        .glass-panel {
+            background: rgba(5, 5, 15, 0.7); backdrop-filter: blur(10px);
+            border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+        }
+
+        #boot-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50;
+            background: #020205; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: auto;
+        }
+
+        #pause-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 40;
+            background: rgba(2, 2, 5, 0.8); backdrop-filter: blur(5px);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: auto; color: #0ff;
+        }
+
+        .typewriter { overflow: hidden; white-space: nowrap; border-right: 2px solid #0ff; animation: typing 2s steps(40, end), blink-caret .75s step-end infinite; }
+        @keyframes typing { from { width: 0 } to { width: 100% } }
+        @keyframes blink-caret { from, to { border-color: transparent } 50% { border-color: #0ff; } }
+        .pulse-text { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; text-shadow: 0 0 20px #0ff; } }
+
+        .ar-corner { position: absolute; width: 40px; height: 40px; border: 2px solid #0ff; opacity: 0.5; }
+        .ar-tl { top: 20px; left: 20px; border-right: none; border-bottom: none; }
+        .ar-tr { top: 20px; right: 20px; border-left: none; border-bottom: none; }
+        .ar-bl { bottom: 20px; left: 20px; border-right: none; border-top: none; }
+        .ar-br { bottom: 20px; right: 20px; border-left: none; border-top: none; }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            position: absolute; bottom: 20px; left: 0; width: 100%;
+            display: none; z-index: 20; pointer-events: none;
+            justify-content: space-between; align-items: flex-end;
+            padding: 0 20px;
+        }
+        #joystick-zone {
+            width: 120px; height: 120px;
+            background: rgba(6, 182, 212, 0.1);
+            border-radius: 50%;
+            border: 2px solid rgba(6, 182, 212, 0.4);
+            position: relative;
+            pointer-events: auto;
+            touch-action: none;
+        }
+        #joystick-stick {
+            width: 50px; height: 50px;
+            background: rgba(6, 182, 212, 0.6);
+            border-radius: 50%;
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+            pointer-events: none;
+        }
+        #action-button {
+            width: 80px; height: 80px;
+            background: rgba(217, 70, 239, 0.2);
+            border-radius: 50%;
+            border: 2px solid #d946ef;
+            color: #d946ef;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 0 20px rgba(217, 70, 239, 0.5);
+        }
+        #action-button:active {
+            background: rgba(217, 70, 239, 0.5);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- Boot Screen -->
+    <div id="boot-screen">
+        <h1 class="hud-font text-4xl text-cyan-400 mb-6 drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]">HOLODECK WEB 4.2</h1>
+        <div class="glass-panel p-8 max-w-lg w-full text-left space-y-4">
+            <p class="text-emerald-400 font-mono text-sm typewriter">> INITIALIZING NEURAL-AR LINK...</p>
+            <p class="text-gray-300 text-sm mt-4">By engaging this visor, you agree to the All Lifeform Rights Declaration and the Global Privacy Protocol. Your data remains encrypted in green-fluid bio-storage.</p>
+            <p id="desktop-instructions" class="text-gray-300 text-sm">Navigate using <span class="text-fuchsia-400 font-bold">W A S D</span> and <span class="text-fuchsia-400 font-bold">Mouse</span>. Click interactive anomalies to cleanse them and increase the global peace metric.</p>
+            <p id="mobile-instructions" class="text-gray-300 text-sm" style="display:none;">Use the <span class="text-cyan-400 font-bold">virtual joystick</span> to move. Touch and drag on the screen to look. Tap <span class="text-fuchsia-400 font-bold">CLEANSE</span> button to interact.</p>
+            <button id="start-btn" class="mt-6 w-full py-3 bg-cyan-900/40 hover:bg-cyan-800/60 border border-cyan-400 text-cyan-400 font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.8)]">
+                [ ACCEPT & INITIALIZE ]
+            </button>
+        </div>
+    </div>
+
+    <!-- Pause Screen -->
+    <div id="pause-screen">
+        <h2 class="hud-font text-3xl mb-4 text-fuchsia-400">AR LINK SUSPENDED</h2>
+        <p class="text-gray-300">Click anywhere to resume immersion.</p>
+    </div>
+
+    <!-- In-Game HUD -->
+    <div id="hud-layer">
+        <div class="ar-corner ar-tl"></div><div class="ar-corner ar-tr"></div>
+        <div class="ar-corner ar-bl"></div><div class="ar-corner ar-br"></div>
+
+        <div class="absolute top-6 left-6 p-3 glass-panel">
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></div>
+                <span class="hud-font text-emerald-400 text-sm tracking-widest">SYNC RATE: 100%</span>
+            </div>
+            <div class="text-xs font-mono text-gray-400 mt-1">NODE: BOUGAINVILLE SECTOR 7</div>
+        </div>
+
+        <div class="absolute top-6 right-6 p-3 glass-panel text-right">
+            <div class="hud-font text-cyan-400 text-sm tracking-widest mb-1">GLOBAL PEACE METRIC</div>
+            <div class="w-48 h-2 bg-gray-800 rounded-full overflow-hidden border border-cyan-900">
+                <div id="peace-bar" class="h-full bg-gradient-to-r from-cyan-600 to-fuchsia-500 w-[87%]" style="transition: width 0.5s ease;"></div>
+            </div>
+            <div id="peace-text" class="text-xs font-mono text-fuchsia-400 mt-1">87.0% - UTOPIA PROJECTED: 2027</div>
+        </div>
+
+        <div class="absolute bottom-6 left-6 p-4 glass-panel max-w-xs border-l-4 border-l-fuchsia-500">
+            <div class="text-[10px] text-fuchsia-400 hud-font mb-1">Ki // SENTIENT COMPANION</div>
+            <div id="ki-dialogue" class="text-sm text-gray-200 italic">"Welcome to the grid. I am scanning the area for anomalies."</div>
+        </div>
+
+        <div id="reticle"></div>
+        <div id="scan-info">
+            <h3 id="scan-title" class="hud-font text-cyan-400 font-bold mb-1">OBJECT ID</h3>
+            <p id="scan-desc" class="text-xs text-gray-300">Description data goes here...</p>
+            <p id="scan-action" class="text-xs text-fuchsia-400 font-bold mt-2 animate-pulse" style="display:none;">[ CLICK TO CLEANSE ]</p>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <div id="joystick-zone">
+            <div id="joystick-stick"></div>
+        </div>
+        <div id="action-button">CLEANSE</div>
+    </div>
+
+    <script>
+        (function() {
+            // Globals
+            let scene, camera, renderer, clock;
+            let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+            let prevTime = performance.now();
+            const velocity = new THREE.Vector3();
+            const direction = new THREE.Vector3();
+            let raycaster, mouse;
+            let interactables = [];
+            let anomalies = [];
+            let companion, companionHoverTime = 0;
+            let peaceScore = 87.0;
+            let isLocked = false;
+
+            // Mobile controls state
+            let isMobile = false;
+            let joystick = { active: false, pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0, maxRadius: 40 };
+            let lookPointerId = null;
+            let lastLookX = 0, lastLookY = 0;
+            let ambientParticles, ambientParticlesGroup, ambientParticlesMaterial;
+            let activeBursts = [];
+
+            // DOM Elements
+            const bootScreen = document.getElementById('boot-screen');
+            const hudLayer = document.getElementById('hud-layer');
+            const pauseScreen = document.getElementById('pause-screen');
+            const startBtn = document.getElementById('start-btn');
+            const reticle = document.getElementById('reticle');
+            const scanInfo = document.getElementById('scan-info');
+            const scanTitle = document.getElementById('scan-title');
+            const scanDesc = document.getElementById('scan-desc');
+            const scanAction = document.getElementById('scan-action');
+            const kiDialogue = document.getElementById('ki-dialogue');
+            const peaceBar = document.getElementById('peace-bar');
+            const peaceText = document.getElementById('peace-text');
+            const mobileControls = document.getElementById('mobile-controls');
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickStick = document.getElementById('joystick-stick');
+            const actionButton = document.getElementById('action-button');
+            const desktopInstructions = document.getElementById('desktop-instructions');
+            const mobileInstructions = document.getElementById('mobile-instructions');
+
+            // Detect mobile
+            isMobile = /Android|iPhone|iPad|iPod|BlackBerry|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent) 
+                       || ('ontouchstart' in window && window.innerWidth < 1024);
+
+            // Show appropriate instructions
+            if (isMobile) {
+                desktopInstructions.style.display = 'none';
+                mobileInstructions.style.display = 'block';
+                mobileControls.style.display = 'flex';
+            }
+
+            startBtn.addEventListener('click', () => {
+                bootScreen.style.display = 'none';
+                init();
+                animate();
+                if (isMobile) {
+                    isLocked = true;
+                    hudLayer.style.display = 'block';
+                    mobileControls.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    // Don't request pointer lock on mobile
+                } else {
+                    if (document.body.requestPointerLock) {
+                        document.body.requestPointerLock();
+                    } else {
+                        isLocked = true;
+                        hudLayer.style.display = 'block';
+                        pauseScreen.style.display = 'none';
+                    }
+                }
+            });
+
+            // Pointer lock for desktop
+            document.addEventListener('pointerlockchange', () => {
+                if (isMobile) return;
+                if (document.pointerLockElement === document.body) {
+                    isLocked = true;
+                    hudLayer.style.display = 'block';
+                    pauseScreen.style.display = 'none';
+                } else {
+                    if (document.body.requestPointerLock) {
+                        isLocked = false;
+                        hudLayer.style.display = 'none';
+                        pauseScreen.style.display = 'flex';
+                    }
+                }
+            });
+
+            pauseScreen.addEventListener('click', () => {
+                if (isMobile) return;
+                if (document.body.requestPointerLock) {
+                    document.body.requestPointerLock();
+                } else {
+                    isLocked = true;
+                    hudLayer.style.display = 'block';
+                    pauseScreen.style.display = 'none';
+                }
+            });
+
+            // Mobile touch controls (pointer events)
+            function handleJoystickStart(e) {
+                e.preventDefault();
+                const rect = joystickZone.getBoundingClientRect();
+                joystick.active = true;
+                joystick.pointerId = e.pointerId;
+                joystick.baseX = rect.left + rect.width / 2;
+                joystick.baseY = rect.top + rect.height / 2;
+                joystick.dx = 0;
+                joystick.dy = 0;
+                joystickStick.style.transform = `translate(-50%, -50%)`;
+                joystickZone.setPointerCapture(e.pointerId);
+            }
+
+            function handleJoystickMove(e) {
+                if (!joystick.active || e.pointerId !== joystick.pointerId) return;
+                e.preventDefault();
+                const dx = e.clientX - joystick.baseX;
+                const dy = e.clientY - joystick.baseY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const clampedDist = Math.min(dist, joystick.maxRadius);
+                const angle = Math.atan2(dy, dx);
+                joystick.dx = Math.cos(angle) * clampedDist;
+                joystick.dy = Math.sin(angle) * clampedDist;
+                joystickStick.style.transform = `translate(calc(-50% + ${joystick.dx}px), calc(-50% + ${joystick.dy}px))`;
+            }
+
+            function handleJoystickEnd(e) {
+                if (e.pointerId === joystick.pointerId) {
+                    joystick.active = false;
+                    joystick.pointerId = null;
+                    joystick.dx = 0;
+                    joystick.dy = 0;
+                    joystickStick.style.transform = `translate(-50%, -50%)`;
+                }
+            }
+
+            function handleLookStart(e) {
+                if (!isMobile) return;
+                if (e.target.closest('#joystick-zone') || e.target.closest('#action-button')) return;
+                if (lookPointerId === null) {
+                    lookPointerId = e.pointerId;
+                    lastLookX = e.clientX;
+                    lastLookY = e.clientY;
+                }
+            }
+
+            function handleLookMove(e) {
+                if (!isMobile) return;
+                if (e.pointerId === lookPointerId) {
+                    const dx = e.clientX - lastLookX;
+                    const dy = e.clientY - lastLookY;
+                    lastLookX = e.clientX;
+                    lastLookY = e.clientY;
+                    camera.rotation.y -= dx * 0.005;
+                    camera.rotation.x -= dy * 0.005;
+                    camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+                }
+            }
+
+            function handleLookEnd(e) {
+                if (e.pointerId === lookPointerId) {
+                    lookPointerId = null;
+                }
+            }
+
+            // Global pointer events for mobile
+            document.addEventListener('pointerdown', (e) => {
+                if (isMobile) {
+                    if (e.target.closest('#joystick-zone')) {
+                        handleJoystickStart(e);
+                    } else if (e.target.closest('#action-button')) {
+                        e.preventDefault();
+                        handleAction();
+                    } else {
+                        handleLookStart(e);
+                    }
+                }
+            });
+            document.addEventListener('pointermove', (e) => {
+                if (isMobile) {
+                    handleJoystickMove(e);
+                    handleLookMove(e);
+                }
+            });
+            document.addEventListener('pointerup', (e) => {
+                if (isMobile) {
+                    handleJoystickEnd(e);
+                    handleLookEnd(e);
+                }
+            });
+            document.addEventListener('pointercancel', (e) => {
+                if (isMobile) {
+                    handleJoystickEnd(e);
+                    handleLookEnd(e);
+                }
+            });
+
+            function updatePeace(amount) {
+                peaceScore = Math.min(100, peaceScore + amount);
+                peaceBar.style.width = `${peaceScore}%`;
+                peaceText.innerText = `${peaceScore.toFixed(1)}% - UTOPIA PROJECTED: 2027`;
+                kiDialogue.innerText = `"Great job. Ecological harmony increased. We are building a better future."`;
+                hudLayer.style.boxShadow = 'inset 0 0 100px rgba(16, 185, 129, 0.4)';
+                setTimeout(() => { hudLayer.style.boxShadow = 'inset 0 0 50px rgba(6, 182, 212, 0.2)'; }, 1000);
+            }
+
+            function init() {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x020205);
+                scene.fog = new THREE.FogExp2(0x020205, 0.03);
+
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 1.6, 0);
+                camera.rotation.order = 'YXZ';
+
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+                clock = new THREE.Clock();
+                raycaster = new THREE.Raycaster();
+                mouse = new THREE.Vector2(0, 0);
+
+                const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+                scene.add(ambientLight);
+                const hemiLight = new THREE.HemisphereLight(0x06b6d4, 0xd946ef, 0.5);
+                hemiLight.position.set(0, 50, 0);
+                scene.add(hemiLight);
+
+                // Ground
+                const gridHelper = new THREE.GridHelper(100, 50, 0x06b6d4, 0x06b6d4);
+                gridHelper.material.opacity = 0.2;
+                gridHelper.material.transparent = true;
+                scene.add(gridHelper);
+                const groundGeo = new THREE.PlaneGeometry(100, 100);
+                const groundMat = new THREE.MeshBasicMaterial({ color: 0x010103, transparent: true, opacity: 0.8 });
+                const ground = new THREE.Mesh(groundGeo, groundMat);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = -0.01;
+                scene.add(ground);
+
+                // Ambient fluid particle field (GPU shader)
+                createAmbientParticles();
+
+                buildEnvironment();
+                createCompanion();
+                createPosters();
+                spawnAnomalies();
+
+                document.addEventListener('keydown', onKeyDown);
+                document.addEventListener('keyup', onKeyUp);
+                if (!isMobile) {
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mousedown', onMouseDown);
+                }
+                window.addEventListener('resize', onWindowResize);
+            }
+
+            function createAmbientParticles() {
+                const particleCount = 400;
+                const positions = new Float32Array(particleCount * 3);
+                const offsets = new Float32Array(particleCount);
+                const sizes = new Float32Array(particleCount);
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i*3] = (Math.random() - 0.5) * 40;
+                    positions[i*3+1] = (Math.random() - 0.5) * 40;
+                    positions[i*3+2] = (Math.random() - 0.5) * 40;
+                    offsets[i] = Math.random() * Math.PI * 2;
+                    sizes[i] = Math.random() * 1.8 + 0.8;
+                }
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('aOffset', new THREE.BufferAttribute(offsets, 1));
+                geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+                ambientParticlesMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uColor: { value: new THREE.Color(0x06b6d4) }
+                    },
+                    vertexShader: `
+                        attribute float aOffset;
+                        attribute float aSize;
+                        uniform float uTime;
+                        varying float vAlpha;
+                        void main() {
+                            vec3 pos = position;
+                            float t = uTime * 0.6;
+                            pos.x += sin(t + aOffset) * 2.0;
+                            pos.y += cos(t * 0.8 + aOffset) * 2.0;
+                            pos.z += sin(t * 1.2 + aOffset * 1.5) * 2.0;
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            gl_PointSize = aSize * (250.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                            vAlpha = 0.4 + 0.6 * sin(t + aOffset);
+                        }
+                    `,
+                    fragmentShader: `
+                        precision mediump float;
+                        uniform vec3 uColor;
+                        varying float vAlpha;
+                        void main() {
+                            vec2 uv = gl_PointCoord - vec2(0.5);
+                            float dist = length(uv);
+                            if (dist > 0.5) discard;
+                            float alpha = smoothstep(0.5, 0.0, dist) * vAlpha;
+                            gl_FragColor = vec4(uColor, alpha * 0.7);
+                        }
+                    `,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                    transparent: true,
+                });
+
+                ambientParticles = new THREE.Points(geometry, ambientParticlesMaterial);
+                ambientParticlesGroup = new THREE.Group();
+                ambientParticlesGroup.add(ambientParticles);
+                scene.add(ambientParticlesGroup);
+            }
+
+            function buildEnvironment() {
+                const createCapsuleTree = (x, z) => {
+                    const trunkGeo = new THREE.CylinderGeometry(0.2, 0.4, 3, 8);
+                    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
+                    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                    trunk.position.set(x, 1.5, z);
+                    scene.add(trunk);
+
+                    const canopyGeo = new THREE.IcosahedronGeometry(1.5, 1);
+                    const canopyMat = new THREE.MeshBasicMaterial({ color: 0x10b981, wireframe: true });
+                    const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+                    canopy.position.set(x, 3.5, z);
+                    const coreGeo = new THREE.SphereGeometry(1, 16, 16);
+                    const coreMat = new THREE.MeshBasicMaterial({ color: 0x059669, transparent: true, opacity: 0.8 });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    canopy.add(core);
+                    const treeLight = new THREE.PointLight(0x10b981, 1, 10);
+                    treeLight.position.set(x, 3.5, z);
+                    scene.add(treeLight);
+                    scene.add(canopy);
+
+                    const interactionHitbox = new THREE.Mesh(new THREE.BoxGeometry(3, 5, 3), new THREE.MeshBasicMaterial({ visible: false }));
+                    interactionHitbox.position.set(x, 2.5, z);
+                    interactionHitbox.userData = { type: 'lore', title: 'ECO-CAPSULE TREE', desc: 'Gen-4 housing unit constructed from 100% recycled nano-plastics. Harbors localized AI micro-fauna.' };
+                    scene.add(interactionHitbox);
+                    interactables.push(interactionHitbox);
+                };
+
+                createCapsuleTree(-5, -5);
+                createCapsuleTree(5, -5);
+                createCapsuleTree(-8, -15);
+                createCapsuleTree(8, -15);
+
+                const monGeo = new THREE.CylinderGeometry(0, 1, 6, 4);
+                const monMat = new THREE.MeshBasicMaterial({ color: 0xd946ef, wireframe: true });
+                const monument = new THREE.Mesh(monGeo, monMat);
+                monument.position.set(0, 3, -10);
+                const monCoreGeo = new THREE.OctahedronGeometry(0.8);
+                const monCoreMat = new THREE.MeshBasicMaterial({ color: 0x0ff });
+                const monCore = new THREE.Mesh(monCoreGeo, monCoreMat);
+                monument.add(monCore);
+                const monLight = new THREE.PointLight(0xd946ef, 2, 20);
+                monLight.position.set(0, 3, -10);
+                scene.add(monLight);
+                scene.add(monument);
+
+                const monHitbox = new THREE.Mesh(new THREE.BoxGeometry(3, 6, 3), new THREE.MeshBasicMaterial({ visible: false }));
+                monHitbox.position.set(0, 3, -10);
+                monHitbox.userData = { type: 'lore', title: 'BOUGAINVILLE PEACE OBELISK', desc: 'Erected 2027. Symbolizes the unification of all nations and sentient beings under the Global Peace Accord.' };
+                scene.add(monHitbox);
+                interactables.push(monHitbox);
+            }
+
+            function createCompanion() {
+                const geo = new THREE.OctahedronGeometry(0.2);
+                const mat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
+                companion = new THREE.Mesh(geo, mat);
+                const coreGeo = new THREE.SphereGeometry(0.1, 8, 8);
+                const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const core = new THREE.Mesh(coreGeo, coreMat);
+                companion.add(core);
+                const light = new THREE.PointLight(0x06b6d4, 1, 5);
+                companion.add(light);
+                scene.add(companion);
+
+                const compHitbox = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ visible: false }));
+                companion.add(compHitbox);
+                compHitbox.userData = { type: 'lore', title: 'Ki - COMPANION', desc: 'Sentient quantum AI attached to your neural link. Monitors vitals and assists in environmental restoration.' };
+                interactables.push(compHitbox);
+            }
+
+            function createPosters() {
+                const makeTextTexture = (title, body, colorHex) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512; canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'rgba(5, 5, 15, 0.8)';
+                    ctx.fillRect(0, 0, 512, 512);
+                    ctx.strokeStyle = colorHex;
+                    ctx.lineWidth = 10;
+                    ctx.strokeRect(0, 0, 512, 512);
+                    ctx.fillStyle = colorHex;
+                    ctx.font = 'bold 40px Orbitron, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(title, 256, 100);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '24px Inter, sans-serif';
+                    const words = body.split(' ');
+                    let line = '';
+                    let y = 180;
+                    for (let i = 0; i < words.length; i++) {
+                        const testLine = line + words[i] + ' ';
+                        const metrics = ctx.measureText(testLine);
+                        if (metrics.width > 450 && i > 0) {
+                            ctx.fillText(line, 256, y);
+                            line = words[i] + ' ';
+                            y += 40;
+                        } else {
+                            line = testLine;
+                        }
+                    }
+                    ctx.fillText(line, 256, y);
+                    return new THREE.CanvasTexture(canvas);
+                };
+
+                const posterGeo = new THREE.PlaneGeometry(3, 3);
+
+                const tex1 = makeTextTexture("QUANTUM PRIVACY", "Citizen data is stored in shifting green-fluid states. Unhackable. You own your identity. Medical SOS override only active with explicit consent.", "#d946ef");
+                const mat1 = new THREE.MeshBasicMaterial({ map: tex1, transparent: true, side: THREE.DoubleSide });
+                const poster1 = new THREE.Mesh(posterGeo, mat1);
+                poster1.position.set(-6, 2, -2);
+                poster1.rotation.y = Math.PI / 4;
+                scene.add(poster1);
+                const hit1 = new THREE.Mesh(posterGeo, new THREE.MeshBasicMaterial({ visible: false }));
+                hit1.position.copy(poster1.position); hit1.rotation.copy(poster1.rotation);
+                hit1.userData = { type: 'lore', title: 'INFO TERMINAL', desc: 'Public access node displaying constitutional rights of Citizens in the 2027 Utopia.' };
+                scene.add(hit1); interactables.push(hit1);
+
+                const tex2 = makeTextTexture("ALL LIFEFORMS ACT", "Sentient AI, Guardian animals, and bio-engineered insects hold baseline rights. Cruelty or hacking results in immediate network exile.", "#10b981");
+                const mat2 = new THREE.MeshBasicMaterial({ map: tex2, transparent: true, side: THREE.DoubleSide });
+                const poster2 = new THREE.Mesh(posterGeo, mat2);
+                poster2.position.set(6, 2, -2);
+                poster2.rotation.y = -Math.PI / 4;
+                scene.add(poster2);
+                const hit2 = new THREE.Mesh(posterGeo, new THREE.MeshBasicMaterial({ visible: false }));
+                hit2.position.copy(poster2.position); hit2.rotation.copy(poster2.rotation);
+                hit2.userData = { type: 'lore', title: 'INFO TERMINAL', desc: 'Legislation details regarding the 2025 Sentience Awakening.' };
+                scene.add(hit2); interactables.push(hit2);
+            }
+
+            function spawnAnomalies() {
+                const anomalyGeo = new THREE.IcosahedronGeometry(0.3, 0);
+                const anomalyMat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+
+                const count = 5 - anomalies.length;
+                for (let i = 0; i < count; i++) {
+                    const mesh = new THREE.Mesh(anomalyGeo, anomalyMat);
+                    mesh.position.set((Math.random() - 0.5) * 20, 0.5, (Math.random() - 0.5) * 20 - 5);
+                    const coreGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+                    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    mesh.add(core);
+                    mesh.userData = { type: 'anomaly', title: 'TOXIC RESIDUE DETECTED', desc: 'Legacy plastic/chemical waste. Target and trigger visor-pulse to reconstruct into safe biomaterial.' };
+                    scene.add(mesh);
+                    interactables.push(mesh);
+                    anomalies.push({ mesh: mesh, hoverOffset: Math.random() * Math.PI * 2 });
+                }
+            }
+
+            function spawnBurst(position, color = 0x06b6d4, count = 40) {
+                const positions = new Float32Array(count * 3);
+                const velocities = [];
+                for (let i = 0; i < count; i++) {
+                    positions[i*3] = 0;
+                    positions[i*3+1] = 0;
+                    positions[i*3+2] = 0;
+                    velocities.push({
+                        x: (Math.random() - 0.5) * 4,
+                        y: Math.random() * 4 + 1,
+                        z: (Math.random() - 0.5) * 4
+                    });
+                }
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const mat = new THREE.PointsMaterial({
+                    color: color,
+                    size: 0.25,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                    transparent: true,
+                    opacity: 1.0
+                });
+                const points = new THREE.Points(geo, mat);
+                points.position.copy(position);
+                scene.add(points);
+                activeBursts.push({
+                    points,
+                    velocities,
+                    life: 1.0,
+                    decay: 1.5,
+                    positions: positions,
+                    geometry: geo
+                });
+            }
+
+            function handleAction() {
+                if (!isLocked) return;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactables);
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    if (object.userData.type === 'anomaly') {
+                        const position = object.position.clone();
+                        scene.remove(object);
+                        interactables = interactables.filter(item => item !== object);
+                        anomalies = anomalies.filter(item => item.mesh !== object);
+
+                        spawnBurst(position, 0x06b6d4);
+                        updatePeace(0.5);
+
+                        reticle.classList.remove('active');
+                        scanInfo.style.opacity = '0';
+                        scanAction.style.display = 'none';
+
+                        setTimeout(() => {
+                            if (anomalies.length < 5) spawnAnomalies();
+                        }, 5000);
+                    }
+                }
+            }
+
+            const PI_2 = Math.PI / 2;
+
+            function onMouseMove(event) {
+                if (isLocked === false || isMobile) return;
+                const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+                camera.rotation.y -= movementX * 0.002;
+                camera.rotation.x -= movementY * 0.002;
+                camera.rotation.x = Math.max(-PI_2, Math.min(PI_2, camera.rotation.x));
+            }
+
+            function onKeyDown(event) {
+                switch (event.code) {
+                    case 'ArrowUp': case 'KeyW': moveForward = true; break;
+                    case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+                    case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+                    case 'ArrowRight': case 'KeyD': moveRight = true; break;
+                }
+            }
+
+            function onKeyUp(event) {
+                switch (event.code) {
+                    case 'ArrowUp': case 'KeyW': moveForward = false; break;
+                    case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+                    case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+                    case 'ArrowRight': case 'KeyD': moveRight = false; break;
+                }
+            }
+
+            function onMouseDown() {
+                handleAction();
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            function updateActiveBursts(delta) {
+                for (let i = activeBursts.length - 1; i >= 0; i--) {
+                    const burst = activeBursts[i];
+                    burst.life -= delta * burst.decay;
+                    if (burst.life <= 0) {
+                        scene.remove(burst.points);
+                        burst.geometry.dispose();
+                        burst.points.material.dispose();
+                        activeBursts.splice(i, 1);
+                        continue;
+                    }
+                    const pos = burst.geometry.attributes.position.array;
+                    for (let j = 0; j < burst.velocities.length; j++) {
+                        pos[j*3] += burst.velocities[j].x * delta;
+                        pos[j*3+1] += burst.velocities[j].y * delta;
+                        pos[j*3+2] += burst.velocities[j].z * delta;
+                        // slight gravity
+                        burst.velocities[j].y -= 2.0 * delta;
+                    }
+                    burst.geometry.attributes.position.needsUpdate = true;
+                    burst.points.material.opacity = burst.life;
+                }
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                const time = performance.now();
+                const delta = Math.min((time - prevTime) / 1000, 0.1);
+                prevTime = time;
+
+                if (isLocked) {
+                    velocity.x -= velocity.x * 10.0 * delta;
+                    velocity.z -= velocity.z * 10.0 * delta;
+
+                    let forwardInput = Number(moveForward) - Number(moveBackward);
+                    let lateralInput = Number(moveRight) - Number(moveLeft);
+                    if (isMobile && joystick.active) {
+                        forwardInput += -joystick.dy / joystick.maxRadius;
+                        lateralInput += joystick.dx / joystick.maxRadius;
+                    }
+                    direction.z = forwardInput;
+                    direction.x = lateralInput;
+                    direction.normalize();
+
+                    const speed = 25.0;
+                    if (forwardInput !== 0) velocity.z -= direction.z * speed * delta;
+                    if (lateralInput !== 0) velocity.x -= direction.x * speed * delta;
+
+                    camera.translateX(velocity.x * delta);
+                    camera.translateZ(velocity.z * delta);
+                    camera.position.y = 1.6;
+
+                    companionHoverTime += delta * 2;
+                    const targetX = camera.position.x + Math.sin(camera.rotation.y) * 1.5;
+                    const targetZ = camera.position.z + Math.cos(camera.rotation.y) * 1.5;
+                    companion.position.x += (targetX - companion.position.x) * 0.05;
+                    companion.position.z += (targetZ - companion.position.z) * 0.05;
+                    companion.position.y = 1.5 + Math.sin(companionHoverTime) * 0.2;
+                    companion.rotation.x += 1 * delta;
+                    companion.rotation.y += 2 * delta;
+
+                    anomalies.forEach(ano => {
+                        ano.hoverOffset += delta * 3;
+                        ano.mesh.position.y = 0.5 + Math.sin(ano.hoverOffset) * 0.2;
+                        ano.mesh.rotation.x += delta;
+                        ano.mesh.rotation.y += delta * 1.5;
+                    });
+
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(interactables);
+                    if (intersects.length > 0) {
+                        const obj = intersects[0].object;
+                        reticle.classList.add('active');
+                        scanInfo.style.opacity = '1';
+                        scanTitle.innerText = obj.userData.title || 'UNKNOWN ENTITY';
+                        scanDesc.innerText = obj.userData.desc || 'No data available.';
+                        if (obj.userData.type === 'anomaly') {
+                            scanTitle.className = 'hud-font text-rose-500 font-bold mb-1';
+                            scanInfo.style.borderLeftColor = '#f43f5e';
+                            scanAction.style.display = 'block';
+                        } else {
+                            scanTitle.className = 'hud-font text-cyan-400 font-bold mb-1';
+                            scanInfo.style.borderLeftColor = '#0ff';
+                            scanAction.style.display = 'none';
+                        }
+                    } else {
+                        reticle.classList.remove('active');
+                        scanInfo.style.opacity = '0';
+                        scanAction.style.display = 'none';
+                    }
+
+                    scene.children.forEach(child => {
+                        if (child.geometry && child.geometry.type === 'CylinderGeometry' && child.material.wireframe) {
+                            child.rotation.y += delta * 0.2;
+                        }
+                    });
+                }
+
+                // Update ambient particles
+                if (ambientParticlesGroup && camera) {
+                    ambientParticlesGroup.position.copy(camera.position);
+                    ambientParticlesMaterial.uniforms.uTime.value += delta;
+                }
+
+                // Update bursts
+                updateActiveBursts(delta);
+
+                renderer.render(scene, camera);
+            }
+        })();
+    </script>
+</body>
+</html>
