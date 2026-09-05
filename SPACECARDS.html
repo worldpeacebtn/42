@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Atlantis of the Mind - Holographic Scroll</title>
+    
+    <!-- Three.js and Post-Processing for Neon Bloom -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    
+    <!-- GSAP for smooth animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-cyan: #00ffff;
+            --glass-bg: rgba(10, 5, 25, 0.7);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            background-color: #020108;
+            font-family: 'Rajdhani', sans-serif;
+            color: #ffffff;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(var(--neon-cyan) 1px, transparent 1px),
+                linear-gradient(90deg, var(--neon-cyan) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center center;
+            opacity: 0.03;
+            z-index: 2;
+            pointer-events: none;
+            perspective: 1000px;
+            transform: rotateX(60deg) scale(2) translateY(-20%);
+        }
+
+        #scroll-content {
+            position: relative;
+            width: 100%;
+            height: 700vh;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .story-section {
+            height: 140vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 8vh;
+            pointer-events: none;
+        }
+
+        /* Audio Toggle Button */
+        #audio-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(10, 5, 25, 0.8);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 10px 18px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            letter-spacing: 1px;
+        }
+
+        #audio-toggle:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 25px var(--neon-cyan);
+        }
+
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 1, 8, 0.94);
+            backdrop-filter: blur(12px);
+            z-index: 50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn-glow {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid var(--neon-cyan);
+            padding: 14px 35px;
+            color: var(--neon-cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 10px rgba(0, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 25px;
+        }
+
+        .btn-glow:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 30px var(--neon-cyan), 0 0 60px var(--neon-cyan);
+            transform: scale(1.05);
+        }
+
+        #audio-visualizer {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 3px;
+            height: 25px;
+            align-items: flex-end;
+            z-index: 5;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        .bar {
+            width: 3px;
+            background: var(--neon-cyan);
+            height: 2px;
+            transition: height 0.05s ease;
+        }
+        
+        .scroll-indicator {
+            position: fixed;
+            bottom: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            opacity: 0.7;
+            animation: bounce 2s infinite;
+            pointer-events: none;
+        }
+        .scroll-indicator svg { width: 26px; height: 26px; stroke: var(--neon-cyan); }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translate(-50%, 0); }
+            40% { transform: translate(-50%, -12px); }
+            60% { transform: translate(-50%, -6px); }
+        }
+    </style>
+</head>
+<body>
+
+    <button id="audio-toggle">AUDIO: OFF</button>
+
+    <div id="start-overlay">
+        <h1 style="font-family:'Orbitron'; font-size:2.4rem; background:linear-gradient(135deg, #00ffff, #ff00ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px;">PROJECT 42</h1>
+        <p style="max-width: 380px; color: #aaa; font-size: 0.95rem;">Enter the web. Scroll down to experience cinematic holo cards, Plato's Cave, and the inner universe.<br><br>Toggle audio anytime via top-right button.</p>
+        <button class="btn-glow" id="init-btn">Initialize Experience</button>
+    </div>
+
+    <div class="grid-overlay"></div>
+    <div id="canvas-container"></div>
+    
+    <div id="audio-visualizer"></div>
+    <div class="scroll-indicator" id="scroller-icon" style="display:none;">
+        <svg fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+    </div>
+
+    <div id="scroll-content">
+        <section class="story-section"></section>
+        <section class="story-section"></section>
+        <section class="story-section"></section>
+        <section class="story-section"></section>
+    </div>
+
+    <script>
+        let audioCtx, masterGain, analyser;
+        const oscillators = [];
+        let isAudioInit = false;
+        let isAudioPlaying = false;
+        
+        const audioToggleBtn = document.getElementById('audio-toggle');
+        const visualizer = document.getElementById('audio-visualizer');
+        const numBars = 32;
+        const bars = [];
+        for(let i = 0; i < numBars; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            visualizer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        function initAudio() {
+            if(isAudioInit) return;
+            isAudioInit = true;
+            
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0; // Starts muted until toggled
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 64;
+            
+            const delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.5;
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.4;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 2000;
+
+            delay.connect(feedback);
+            feedback.connect(filter);
+            filter.connect(delay);
+            delay.connect(analyser);
+            masterGain.connect(delay);
+            masterGain.connect(analyser);
+            analyser.connect(audioCtx.destination);
+
+            // Pure peaceful ambient pads
+            const frequencies = [220, 329.63, 440, 554.37];
+            frequencies.forEach(freq => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.12;
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                oscillators.push(osc);
+            });
+        }
+
+        audioToggleBtn.addEventListener('click', () => {
+            if (!isAudioInit) initAudio();
+            isAudioPlaying = !isAudioPlaying;
+            if (isAudioPlaying) {
+                masterGain.gain.setTargetAtTime(0.3, audioCtx.currentTime, 0.5);
+                audioToggleBtn.innerText = "AUDIO: ON";
+                audioToggleBtn.style.background = "var(--neon-cyan)";
+                audioToggleBtn.style.color = "#000";
+            } else {
+                masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5);
+                audioToggleBtn.innerText = "AUDIO: OFF";
+                audioToggleBtn.style.background = "rgba(10, 5, 25, 0.8)";
+                audioToggleBtn.style.color = "var(--neon-cyan)";
+            }
+        });
+
+        function playGlassPing() {
+            if(!audioCtx || !isAudioPlaying) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200 + Math.random() * 400, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.2);
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.2);
+        }
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x05010a, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const START_Z = 35;
+        const END_Z = -5;
+        camera.position.set(0, 3, START_Z);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.3;
+        container.appendChild(renderer.domElement);
+
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 0.6;
+        bloomPass.radius = 0.5;
+
+        const composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // Glass Materials with water & holographic filters
+        const glassMaterials = [
+            new THREE.MeshPhysicalMaterial({
+                color: 0xffffff, metalness: 0.1, roughness: 0.04,
+                transmission: 0.95, ior: 1.8, thickness: 1.5,
+                transparent: true, opacity: 0.8, side: THREE.DoubleSide
+            }),
+            new THREE.MeshPhysicalMaterial({
+                color: 0x00ffff, metalness: 0.2, roughness: 0.02,
+                transmission: 0.9, ior: 2.1, thickness: 2.0,
+                transparent: true, opacity: 0.7, side: THREE.DoubleSide,
+                emissive: 0x005555, emissiveIntensity: 0.25
+            }),
+            new THREE.MeshPhysicalMaterial({
+                color: 0xff00ff, metalness: 0.2, roughness: 0.02,
+                transmission: 0.9, ior: 2.4, thickness: 2.5,
+                transparent: true, opacity: 0.6, side: THREE.DoubleSide,
+                emissive: 0x550055, emissiveIntensity: 0.25
+            })
+        ];
+
+        const rainbowColors = [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082, 0x9400d3];
+        const orbitalLights = [];
+        rainbowColors.forEach((color, i) => {
+            const light = new THREE.PointLight(color, 2, 30);
+            scene.add(light);
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshBasicMaterial({ color: color }));
+            light.add(bulb);
+            orbitalLights.push({ light: light, angle: (Math.PI * 2 / 7) * i, radius: 10, speed: 0.003 + (Math.random() * 0.005) });
+        });
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+        // Spiderweb Entrance
+        const webGroup = new THREE.Group();
+        const webGeo = new THREE.IcosahedronGeometry(12, 3);
+        const posAttribute = webGeo.attributes.position;
+        for(let i = 0; i < posAttribute.count; i++) {
+            posAttribute.setX(i, posAttribute.getX(i) + (Math.random() - 0.5));
+            posAttribute.setY(i, posAttribute.getY(i) + (Math.random() - 0.5));
+            posAttribute.setZ(i, posAttribute.getZ(i) + (Math.random() - 0.5));
+        }
+        const webEdges = new THREE.EdgesGeometry(webGeo);
+        const webMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending });
+        scene.add(new THREE.LineSegments(webEdges, webMat).translateX(0).translateZ(26));
+
+        // Matryoshka Glasshouse with Distance Fluid Spheres
+        const matryoshkaGroup = new THREE.Group();
+        scene.add(matryoshkaGroup);
+        const layers = [];
+        for(let i=0; i<3; i++) {
+            const geo = new THREE.IcosahedronGeometry(3 - (i * 0.8), 0);
+            const mesh = new THREE.Mesh(geo, glassMaterials[i]);
+            const wireframe = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: i===1?0x00ffff:0xff00ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending }));
+            mesh.add(wireframe);
+            matryoshkaGroup.add(mesh);
+            layers.push(mesh);
+        }
+
+        // Background Distanced Glass Spheres with Fluid & Holographic Filter
+        const bgSpheresGroup = new THREE.Group();
+        scene.add(bgSpheresGroup);
+        for(let i=0; i<6; i++) {
+            const sphereGeo = new THREE.SphereGeometry(3, 32, 32);
+            const sphereMat = new THREE.MeshPhysicalMaterial({
+                color: i % 2 === 0 ? 0x00ffff : 0xff00ff,
+                transmission: 0.85,
+                roughness: 0.1,
+                ior: 1.5,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide
+            });
+            const sph = new THREE.Mesh(sphereGeo, sphereMat);
+            const angle = (Math.PI * 2 / 6) * i;
+            sph.position.set(Math.cos(angle) * 25, (Math.random() - 0.5) * 15, Math.sin(angle) * 25 - 10);
+            bgSpheresGroup.add(sph);
+        }
+
+        // Fluid Simulation
+        const fluidCount = 1200;
+        const fluidGeo = new THREE.BufferGeometry();
+        const fluidPositions = new Float32Array(fluidCount * 3);
+        const fluidOriginalPositions = new Float32Array(fluidCount * 3);
+        for(let i = 0; i < fluidCount * 3; i += 3) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = u * 2.0 * Math.PI;
+            const phi = Math.acos(2.0 * v - 1.0);
+            const r = Math.cbrt(Math.random()) * 1.5;
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+            fluidPositions[i] = x; fluidPositions[i+1] = y; fluidPositions[i+2] = z;
+            fluidOriginalPositions[i] = x; fluidOriginalPositions[i+1] = y; fluidOriginalPositions[i+2] = z;
+        }
+        fluidGeo.setAttribute('position', new THREE.BufferAttribute(fluidPositions, 3));
+        const fluidParticles = new THREE.Points(fluidGeo, new THREE.PointsMaterial({ size: 0.09, color: 0x00ffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.7 }));
+        matryoshkaGroup.add(fluidParticles);
+
+        // Core Universe
+        const coreUniverseGeo = new THREE.BufferGeometry();
+        const coreCount = 3000;
+        const corePos = new Float32Array(coreCount * 3);
+        for(let i = 0; i < coreCount * 3; i += 3) {
+            const r = Math.random() * 8;
+            const theta = Math.random() * 2 * Math.PI;
+            const phi = Math.acos(2 * Math.random() - 1);
+            corePos[i] = r * Math.sin(phi) * Math.cos(theta);
+            corePos[i+1] = r * Math.sin(phi) * Math.sin(theta);
+            corePos[i+2] = r * Math.cos(phi);
+        }
+        coreUniverseGeo.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
+        const coreUniverse = new THREE.Points(coreUniverseGeo, new THREE.PointsMaterial({ size: 0.1, color: 0xff7fff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95 }));
+        scene.add(coreUniverse);
+
+        // Canvas Text Generator for Cinematic Cards
+        function createTextTexture(title, text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Holographic background
+            ctx.fillStyle = 'rgba(10, 5, 25, 0.85)';
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Border
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(10, 10, 492, 492);
+            
+            // Title
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 36px Orbitron, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, 256, 80);
+            
+            // Paragraph text wrapping
+            ctx.fillStyle = '#e0fbfc';
+            ctx.font = '24px Rajdhani, sans-serif';
+            ctx.textAlign = 'center';
+            
+            const words = text.split(' ');
+            let line = '';
+            let y = 160;
+            const maxWidth = 420;
+            const lineHeight = 36;
+            
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                    ctx.fillText(line, 256, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, 256, y);
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const storyData = [
+            { title: "THE CAVE", text: "In Plato’s Cave, chained prisoners mistake flickering shadows for absolute truth. Today, algorithms form our digital cave." },
+            { title: "THE RETURN", text: "When the philosopher escapes and returns to free others, they mock him. Familiar shadows feel safer than truth." },
+            { title: "ATLANTIS", text: "Plato described Atlantis as a blueprint for advanced civic harmony—where human coordination surpassed division." },
+            { title: "INNER UNIVERSE", text: "Scroll deeper. Watch cards morph back into sacred symbols (♣️ ♦️ ♠️ ♥️), revealing an infinite inner universe." }
+        ];
+
+        // 3D Glass Cards with Cinematic Text Branded in
+        const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
+        function centerGeo(geo) {
+            geo.computeBoundingBox();
+            geo.translate(
+                -0.5 * (geo.boundingBox.max.x - geo.boundingBox.min.x) - geo.boundingBox.min.x,
+                -0.5 * (geo.boundingBox.max.y - geo.boundingBox.min.y) - geo.boundingBox.min.y,
+                -0.5 * (geo.boundingBox.max.z - geo.boundingBox.min.z) - geo.boundingBox.min.z
+            );
+            return geo;
+        }
+
+        const clubShape = new THREE.Shape();
+        clubShape.absarc(0, 2, 1.5, 0, Math.PI * 2); clubShape.absarc(-1.5, -1, 1.5, 0, Math.PI * 2); clubShape.absarc(1.5, -1, 1.5, 0, Math.PI * 2); clubShape.moveTo(-0.5, -2.5); clubShape.lineTo(-1, -4); clubShape.lineTo(1, -4); clubShape.lineTo(0.5, -2.5);
+        const clubGeo = centerGeo(new THREE.ExtrudeGeometry(clubShape, extrudeSettings));
+
+        const diamondShape = new THREE.Shape();
+        diamondShape.moveTo(0, 5); diamondShape.lineTo(3, 0); diamondShape.lineTo(0, -5); diamondShape.lineTo(-3, 0); diamondShape.lineTo(0, 5);
+        const diamondGeo = centerGeo(new THREE.ExtrudeGeometry(diamondShape, extrudeSettings));
+
+        const spadeShape = new THREE.Shape();
+        spadeShape.moveTo(2.5, 2.5); spadeShape.bezierCurveTo(2.5, 2.5, 2.0, 0, 0, 0); spadeShape.bezierCurveTo(-3.0, 0, -3.0, 3.5, -3.0, 3.5); spadeShape.bezierCurveTo(-3.0, 5.5, -1.0, 7.7, 2.5, 9.5); spadeShape.bezierCurveTo(6.0, 7.7, 8.0, 5.5, 8.0, 3.5); spadeShape.bezierCurveTo(8.0, 3.5, 8.0, 0, 5.0, 0); spadeShape.bezierCurveTo(3.5, 0, 2.5, 2.5, 2.5, 2.5); spadeShape.moveTo(2.5, 9.5); spadeShape.lineTo(1.5, 12); spadeShape.lineTo(3.5, 12); spadeShape.lineTo(2.5, 9.5);
+        const spadeGeo = centerGeo(new THREE.ExtrudeGeometry(spadeShape, extrudeSettings));
+
+        const heartShape = new THREE.Shape();
+        heartShape.moveTo(2.5, 2.5); heartShape.bezierCurveTo(2.5, 2.5, 2.0, 0, 0, 0); heartShape.bezierCurveTo(-3.0, 0, -3.0, 3.5, -3.0, 3.5); heartShape.bezierCurveTo(-3.0, 5.5, -1.0, 7.7, 2.5, 9.5); heartShape.bezierCurveTo(6.0, 7.7, 8.0, 5.5, 8.0, 3.5); heartShape.bezierCurveTo(8.0, 3.5, 8.0, 0, 5.0, 0); heartShape.bezierCurveTo(3.5, 0, 2.5, 2.5, 2.5, 2.5);
+        const heartGeo = centerGeo(new THREE.ExtrudeGeometry(heartShape, extrudeSettings));
+
+        const symbolGeos = [clubGeo, diamondGeo, spadeGeo, heartGeo];
+        const floatingCards = [];
+        const cardGeometry = new THREE.BoxGeometry(3.2, 4.8, 0.3);
+        
+        symbolGeos.forEach((geo, i) => {
+            const cardGroup = new THREE.Group();
+            const textTex = createTextTexture(storyData[i].title, storyData[i].text);
+            const cardMaterials = [
+                glassMaterials[i % glassMaterials.length],
+                glassMaterials[i % glassMaterials.length],
+                glassMaterials[i % glassMaterials.length],
+                glassMaterials[i % glassMaterials.length],
+                new THREE.MeshBasicMaterial({ map: textTex }), // Front face has story text
+                glassMaterials[i % glassMaterials.length]
+            ];
+            
+            const baseCard = new THREE.Mesh(cardGeometry, cardMaterials);
+            const cardEdges = new THREE.LineSegments(new THREE.EdgesGeometry(cardGeometry), new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 }));
+            baseCard.add(cardEdges);
+            
+            const symMesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: 0xff00ff, transmission: 0.6, opacity: 0.9, transparent: true, emissive: 0x550055 }));
+            if(i === 2 || i === 3) symMesh.rotation.x = Math.PI;
+            symMesh.scale.set(0.22, 0.22, 0.22);
+            symMesh.position.z = 0;
+            
+            cardGroup.add(baseCard);
+            cardGroup.add(symMesh);
+            cardGroup.position.set((Math.random() - 0.5) * 35, (Math.random() - 0.5) * 16, 5 + Math.random() * 14);
+            
+            scene.add(cardGroup);
+            floatingCards.push({
+                mesh: cardGroup,
+                baseCard: baseCard,
+                seedOffset: Math.random() * 100,
+                targetOrbitAngle: (Math.PI * 2 / 4) * i
+            });
+        });
+
+        // Rich Cosmic Nebula Particles (Purple, Pink, Blue, Orange, Green)
+        function createStarTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.2, 'rgba(200,220,255,0.8)');
+            grad.addColorStop(0.5, 'rgba(255,0,255,0.3)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,64,64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const particleTex = createStarTexture();
+        const pGeo = new THREE.BufferGeometry();
+        const pCount = 4500;
+        const pPos = new Float32Array(pCount * 3);
+        const pOrigPos = new Float32Array(pCount * 3);
+        const pColors = new Float32Array(pCount * 3);
+        
+        const palette = [0xff00ff, 0x00ffff, 0x8a2be2, 0xff7f00, 0x00ff7f];
+        for(let i=0; i<pCount*3; i+=3) {
+            const r = 25 + Math.random() * 70;
+            const theta = Math.random() * 2 * Math.PI;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+            pPos[i] = x; pPos[i+1] = y; pPos[i+2] = z;
+            pOrigPos[i] = x; pOrigPos[i+1] = y; pOrigPos[i+2] = z;
+            
+            const col = new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
+            pColors[i] = col.r; pColors[i+1] = col.g; pColors[i+2] = col.b;
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pColors, 3));
+        const nebula = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.3, map: particleTex, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+        scene.add(nebula);
+
+        // Scroll Logic
+        let scrollProgress = 0;
+        let smoothedProgress = 0;
+
+        const startBtn = document.getElementById('init-btn');
+        const startOverlay = document.getElementById('start-overlay');
+        const scrollerIcon = document.getElementById('scroller-icon');
+        
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            playGlassPing();
+            gsap.to(startOverlay, { opacity: 0, duration: 1, onComplete: () => {
+                startOverlay.style.display = 'none';
+                scrollerIcon.style.display = 'block';
+            }});
+        });
+
+        window.addEventListener('scroll', () => {
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            if (maxScroll > 0) {
+                scrollProgress = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+            }
+        });
+
+        const clock = new THREE.Clock();
+        const dataArray = new Uint8Array(64);
+        const fogColors = [new THREE.Color(0x05010a), new THREE.Color(0x100520), new THREE.Color(0x051020), new THREE.Color(0x150020)];
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            smoothedProgress += (scrollProgress - smoothedProgress) * 0.05;
+
+            camera.position.z = START_Z - (smoothedProgress * (START_Z - END_Z));
+            camera.position.x = Math.sin(time * 0.4) * 0.3;
+            camera.position.y = 3 + Math.cos(time * 0.3) * 0.3;
+            camera.lookAt(0, 0, 0);
+
+            let audioWaveIntensity = 0;
+            if(isAudioInit && analyser) {
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for(let i=0; i<32; i++) {
+                    sum += dataArray[i];
+                    if(bars[i]) bars[i].style.height = `${(dataArray[i] / 255) * 22}px`;
+                }
+                audioWaveIntensity = (sum / 32) / 255;
+            }
+
+            let stageIndex = Math.floor(smoothedProgress * 3);
+            let nextStage = Math.min(stageIndex + 1, 3);
+            let stageProgress = (smoothedProgress * 3) - stageIndex;
+            scene.fog.color.copy(fogColors[stageIndex]).lerp(fogColors[nextStage], stageProgress);
+            renderer.setClearColor(scene.fog.color);
+
+            bloomPass.strength = 0.6 + (smoothedProgress * 2.5);
+
+            layers.forEach((mesh, i) => {
+                const speed = (i%2===0 ? 1 : -1) * 0.002;
+                mesh.rotation.x += speed;
+                mesh.rotation.y += speed * 1.5;
+                const spacing = smoothedProgress * 4.5;
+                const baseScale = 1 + (i * spacing * 0.1);
+                mesh.scale.setScalar(baseScale * (1 + audioWaveIntensity * 0.15));
+            });
+
+            // Fluid Wave Behavior
+            const fPositions = fluidParticles.geometry.attributes.position.array;
+            for(let i = 0; i < fluidCount * 3; i += 3) {
+                const ox = fluidOriginalPositions[i];
+                const oy = fluidOriginalPositions[i+1];
+                const oz = fluidOriginalPositions[i+2];
+                const wave = Math.sin(time * 3 + ox * 2) * audioWaveIntensity * 0.4;
+                fPositions[i] = ox + wave;
+                fPositions[i+1] = oy + wave;
+                fPositions[i+2] = oz + wave;
+            }
+            fluidParticles.geometry.attributes.position.needsUpdate = true;
+            fluidParticles.rotation.y += 0.01;
+
+            // Nebula Wave Reaction
+            const pPositions = nebula.geometry.attributes.position.array;
+            for(let i = 0; i < pCount * 3; i += 3) {
+                const px = pOrigPos[i];
+                const py = pOrigPos[i+1];
+                const pz = pOrigPos[i+2];
+                const pulse = 1 + Math.sin(time * 3 + px) * audioWaveIntensity * 0.1;
+                pPositions[i] = px * pulse;
+                pPositions[i+1] = py * pulse;
+                pPositions[i+2] = pz * pulse;
+            }
+            nebula.geometry.attributes.position.needsUpdate = true;
+            nebula.rotation.y += 0.0004;
+
+            coreUniverse.rotation.y -= 0.005;
+            coreUniverse.rotation.x += 0.002;
+            coreUniverse.scale.setScalar(1 + (smoothedProgress * 1.5));
+
+            orbitalLights.forEach((pl, i) => {
+                pl.angle += pl.speed;
+                const currentRadius = Math.max(1.2, pl.radius - (smoothedProgress * 7));
+                pl.light.position.x = Math.cos(pl.angle) * currentRadius;
+                pl.light.position.y = Math.sin(time * 0.5 + i) * 3;
+                pl.light.position.z = Math.sin(pl.angle) * currentRadius;
+            });
+
+            floatingCards.forEach((cardObj) => {
+                const mesh = cardObj.mesh;
+                const floatX = Math.sin(time * 0.5 + cardObj.seedOffset) * 16;
+                const floatY = Math.cos(time * 0.4 + cardObj.seedOffset) * 8;
+                const floatZ = 5 + Math.sin(time * 0.2 + cardObj.seedOffset) * 12;
+                
+                cardObj.targetOrbitAngle += 0.005;
+                const orbitRadius = 5.0 + Math.sin(time)*0.3;
+                const orbitX = Math.cos(cardObj.targetOrbitAngle) * orbitRadius;
+                const orbitZ = Math.sin(cardObj.targetOrbitAngle) * orbitRadius;
+
+                const orbitBlend = Math.pow(smoothedProgress, 2.5);
+                
+                mesh.position.x = floatX * (1 - orbitBlend) + orbitX * orbitBlend;
+                mesh.position.y = floatY * (1 - orbitBlend) + (Math.sin(time * 1.5 + cardObj.seedOffset) * 1.2) * orbitBlend;
+                mesh.position.z = floatZ * (1 - orbitBlend) + orbitZ * orbitBlend;
+
+                mesh.rotation.x += 0.01 * (1 - orbitBlend);
+                mesh.rotation.y += 0.015 * (1 - orbitBlend);
+                
+                // Cinematic blending: card body fades out at the end so pure symbols ♣️♦️♠️♥️ remain
+                const cardOpacity = Math.max(0, 1 - (smoothedProgress * 1.3));
+                if(Array.isArray(cardObj.baseCard.material)) {
+                    cardObj.baseCard.material.forEach(m => { if(m.opacity !== undefined) m.opacity = cardOpacity * 0.75; });
+                }
+
+                if (orbitBlend > 0.1) {
+                     const targetRotation = new THREE.Euler().setFromQuaternion(
+                         new THREE.Quaternion().setFromRotationMatrix(
+                             new THREE.Matrix4().lookAt(mesh.position, scene.position, camera.up)
+                         )
+                     );
+                     mesh.rotation.x += (targetRotation.x - mesh.rotation.x) * orbitBlend * 0.05;
+                     mesh.rotation.y += (targetRotation.y - mesh.rotation.y) * orbitBlend * 0.05;
+                     mesh.rotation.z += (targetRotation.z - mesh.rotation.z) * orbitBlend * 0.05;
+                }
+
+                mesh.scale.setScalar(1 + audioWaveIntensity * 0.15);
+            });
+
+            composer.render();
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
