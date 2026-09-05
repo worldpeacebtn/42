@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Atlantis of the Mind - Free Roam & Matryoshka Glasshouse</title>
+    
+    <!-- Three.js and Post-Processing for Neon Bloom -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    
+    <!-- GSAP for smooth animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-cyan: #00ffff;
+            --glass-bg: rgba(10, 5, 25, 0.8);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #020108;
+            font-family: 'Rajdhani', sans-serif;
+            color: #ffffff;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(var(--neon-cyan) 1px, transparent 1px),
+                linear-gradient(90deg, var(--neon-cyan) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center center;
+            opacity: 0.03;
+            z-index: 2;
+            pointer-events: none;
+            perspective: 1000px;
+            transform: rotateX(60deg) scale(2) translateY(-20%);
+        }
+
+        /* UI Control Bar */
+        .ui-bar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 12px;
+        }
+
+        .ctrl-btn {
+            background: rgba(10, 5, 25, 0.85);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 10px 18px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            letter-spacing: 1px;
+            pointer-events: auto;
+        }
+
+        .ctrl-btn:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 25px var(--neon-cyan);
+        }
+
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 1, 8, 0.96);
+            backdrop-filter: blur(15px);
+            z-index: 50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn-glow {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid var(--neon-cyan);
+            padding: 14px 35px;
+            color: var(--neon-cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 10px rgba(0, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 25px;
+        }
+
+        .btn-glow:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 30px var(--neon-cyan), 0 0 60px var(--neon-cyan);
+            transform: scale(1.05);
+        }
+
+        .hud-instruction {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 5, 25, 0.7);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            letter-spacing: 1.5px;
+            color: var(--neon-cyan);
+            z-index: 10;
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ui-bar">
+        <button id="audio-toggle" class="ctrl-btn">AUDIO: OFF</button>
+    </div>
+
+    <div id="start-overlay">
+        <h1 style="font-family:'Orbitron'; font-size:2.6rem; background:linear-gradient(135deg, #00ffff, #ff00ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px;">PROJECT 42</h1>
+        <p style="max-width: 400px; color: #aaa; font-size: 0.95rem;">Atlantis of the Mind. Free Roam Mode with the Matryoshka Glasshouse and Cosmic Sphere Environment.</p>
+        <button class="btn-glow" id="init-btn">Enter Universe</button>
+    </div>
+
+    <div class="grid-overlay"></div>
+    <div id="canvas-container"></div>
+    <div class="hud-instruction">DRAG TO ROTATE • SCROLL/PINCH TO ZOOM XYZ • CLICK SYMBOLS</div>
+
+    <script>
+        // --- NOISE-FREE INTERACTION AUDIO ---
+        let audioCtx;
+        let isAudioPlaying = false;
+        const audioToggleBtn = document.getElementById('audio-toggle');
+
+        function initAudio() {
+            if(audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        audioToggleBtn.addEventListener('click', () => {
+            initAudio();
+            isAudioPlaying = !isAudioPlaying;
+            audioToggleBtn.innerText = isAudioPlaying ? "AUDIO: ON" : "AUDIO: OFF";
+            audioToggleBtn.style.background = isAudioPlaying ? "var(--neon-cyan)" : "rgba(10, 5, 25, 0.85)";
+            audioToggleBtn.style.color = isAudioPlaying ? "#000" : "var(--neon-cyan)";
+        });
+
+        function playGlassPing() {
+            if(!audioCtx || !isAudioPlaying) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200 + Math.random() * 800, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.2);
+        }
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x05010a, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 16);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.4;
+        container.appendChild(renderer.domElement);
+
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.6, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 0.8;
+        bloomPass.radius = 0.5;
+
+        const composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // Glass Materials
+        const glassMaterials = [
+            new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.04, transmission: 0.95, ior: 1.8, thickness: 1.5, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
+            new THREE.MeshPhysicalMaterial({ color: 0x00ffff, metalness: 0.2, roughness: 0.02, transmission: 0.9, ior: 2.1, thickness: 2.0, transparent: true, opacity: 0.75, side: THREE.DoubleSide, emissive: 0x005555, emissiveIntensity: 0.3 }),
+            new THREE.MeshPhysicalMaterial({ color: 0xff00ff, metalness: 0.2, roughness: 0.02, transmission: 0.9, ior: 2.4, thickness: 2.5, transparent: true, opacity: 0.65, side: THREE.DoubleSide, emissive: 0x550055, emissiveIntensity: 0.3 })
+        ];
+
+        const rainbowColors = [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082, 0x9400d3];
+        const orbitalLights = [];
+        rainbowColors.forEach((color, i) => {
+            const light = new THREE.PointLight(color, 2, 35);
+            scene.add(light);
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshBasicMaterial({ color: color }));
+            light.add(bulb);
+            orbitalLights.push({ light: light, angle: (Math.PI * 2 / 7) * i, radius: 9, speed: 0.004 });
+        });
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+        // Background Distanced Glass Spheres
+        const bgSpheresGroup = new THREE.Group();
+        scene.add(bgSpheresGroup);
+        const bgSpheres = [];
+        for(let i=0; i<10; i++) {
+            const sphereGeo = new THREE.SphereGeometry(4, 32, 32);
+            const sphereMat = new THREE.MeshPhysicalMaterial({
+                color: i % 3 === 0 ? 0x00ffff : (i % 3 === 1 ? 0xff00ff : 0x8a2be2),
+                transmission: 0.88, roughness: 0.08, ior: 1.6, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+                emissive: i % 2 === 0 ? 0x004444 : 0x440044, emissiveIntensity: 0.3
+            });
+            const sph = new THREE.Mesh(sphereGeo, sphereMat);
+            const angle = (Math.PI * 2 / 10) * i;
+            sph.position.set(Math.cos(angle) * 26, (Math.random() - 0.5) * 16, Math.sin(angle) * 26);
+            bgSpheresGroup.add(sph);
+            bgSpheres.push(sph);
+        }
+
+        // Matryoshka Glasshouse (Nested Icosahedrons)
+        const matryoshkaGroup = new THREE.Group();
+        scene.add(matryoshkaGroup);
+        const layers = [];
+        for(let i=0; i<3; i++) {
+            const geo = new THREE.IcosahedronGeometry(4 - (i * 1.2), 0);
+            const mesh = new THREE.Mesh(geo, glassMaterials[i]);
+            const wireframe = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: i===1?0x00ffff:0xff00ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending }));
+            mesh.add(wireframe);
+            matryoshkaGroup.add(mesh);
+            layers.push(mesh);
+        }
+
+        // Fluid Simulation Inside Glasshouse
+        const fluidCount = 1500;
+        const fluidGeo = new THREE.BufferGeometry();
+        const fluidPositions = new Float32Array(fluidCount * 3);
+        const fluidOriginalPositions = new Float32Array(fluidCount * 3);
+        for(let i = 0; i < fluidCount * 3; i += 3) {
+            const u = Math.random(); const v = Math.random();
+            const theta = u * 2.0 * Math.PI; const phi = Math.acos(2.0 * v - 1.0);
+            const r = Math.cbrt(Math.random()) * 2.0;
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+            fluidPositions[i] = x; fluidPositions[i+1] = y; fluidPositions[i+2] = z;
+            fluidOriginalPositions[i] = x; fluidOriginalPositions[i+1] = y; fluidOriginalPositions[i+2] = z;
+        }
+        fluidGeo.setAttribute('position', new THREE.BufferAttribute(fluidPositions, 3));
+        const fluidParticles = new THREE.Points(fluidGeo, new THREE.PointsMaterial({ size: 0.1, color: 0x00ffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85 }));
+        matryoshkaGroup.add(fluidParticles);
+
+        // Core Universe
+        const coreUniverseGeo = new THREE.BufferGeometry();
+        const coreCount = 4000;
+        const corePos = new Float32Array(coreCount * 3);
+        for(let i = 0; i < coreCount * 3; i += 3) {
+            const r = Math.random() * 14;
+            const theta = Math.random() * 2 * Math.PI; const phi = Math.acos(2 * Math.random() - 1);
+            corePos[i] = r * Math.sin(phi) * Math.cos(theta);
+            corePos[i+1] = r * Math.sin(phi) * Math.sin(theta);
+            corePos[i+2] = r * Math.cos(phi);
+        }
+        coreUniverseGeo.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
+        const coreUniverse = new THREE.Points(coreUniverseGeo, new THREE.PointsMaterial({ size: 0.12, color: 0xff7fff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95 }));
+        scene.add(coreUniverse);
+
+        // Sacred Suit Symbols (♣️ ♦️ ♠️ ♥️)
+        const extrudeSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
+        function centerGeo(geo) {
+            geo.computeBoundingBox();
+            geo.translate(-0.5 * (geo.boundingBox.max.x - geo.boundingBox.min.x) - geo.boundingBox.min.x, -0.5 * (geo.boundingBox.max.y - geo.boundingBox.min.y) - geo.boundingBox.min.y, -0.5 * (geo.boundingBox.max.z - geo.boundingBox.min.z) - geo.boundingBox.min.z);
+            return geo;
+        }
+
+        const clubShape = new THREE.Shape(); clubShape.absarc(0, 2, 1.5, 0, Math.PI * 2); clubShape.absarc(-1.5, -1, 1.5, 0, Math.PI * 2); clubShape.absarc(1.5, -1, 1.5, 0, Math.PI * 2); clubShape.moveTo(-0.5, -2.5); clubShape.lineTo(-1, -4); clubShape.lineTo(1, -4); clubShape.lineTo(0.5, -2.5);
+        const clubGeo = centerGeo(new THREE.ExtrudeGeometry(clubShape, extrudeSettings));
+        const diamondShape = new THREE.Shape(); diamondShape.moveTo(0, 5); diamondShape.lineTo(3, 0); diamondShape.lineTo(0, -5); diamondShape.lineTo(-3, 0); diamondShape.lineTo(0, 5);
+        const diamondGeo = centerGeo(new THREE.ExtrudeGeometry(diamondShape, extrudeSettings));
+        const spadeShape = new THREE.Shape(); spadeShape.moveTo(2.5, 2.5); spadeShape.bezierCurveTo(2.5, 2.5, 2.0, 0, 0, 0); spadeShape.bezierCurveTo(-3.0, 0, -3.0, 3.5, -3.0, 3.5); spadeShape.bezierCurveTo(-3.0, 5.5, -1.0, 7.7, 2.5, 9.5); spadeShape.bezierCurveTo(6.0, 7.7, 8.0, 5.5, 8.0, 3.5); spadeShape.bezierCurveTo(8.0, 3.5, 8.0, 0, 5.0, 0); spadeShape.bezierCurveTo(3.5, 0, 2.5, 2.5, 2.5, 2.5); spadeShape.moveTo(2.5, 9.5); spadeShape.lineTo(1.5, 12); spadeShape.lineTo(3.5, 12); spadeShape.lineTo(2.5, 9.5);
+        const spadeGeo = centerGeo(new THREE.ExtrudeGeometry(spadeShape, extrudeSettings));
+        const heartShape = new THREE.Shape(); heartShape.moveTo(2.5, 2.5); heartShape.bezierCurveTo(2.5, 2.5, 2.0, 0, 0, 0); heartShape.bezierCurveTo(-3.0, 0, -3.0, 3.5, -3.0, 3.5); heartShape.bezierCurveTo(-3.0, 5.5, -1.0, 7.7, 2.5, 9.5); heartShape.bezierCurveTo(6.0, 7.7, 8.0, 5.5, 8.0, 3.5); heartShape.bezierCurveTo(8.0, 3.5, 8.0, 0, 5.0, 0); heartShape.bezierCurveTo(3.5, 0, 2.5, 2.5, 2.5, 2.5);
+        const heartGeo = centerGeo(new THREE.ExtrudeGeometry(heartShape, extrudeSettings));
+
+        const symbolGeos = [clubGeo, diamondGeo, spadeGeo, heartGeo];
+        const floatingSymbols = [];
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        symbolGeos.forEach((geo, i) => {
+            const symMat = new THREE.MeshPhysicalMaterial({ 
+                color: i % 2 === 0 ? 0xff00ff : 0x00ffff, 
+                transmission: 0.6, 
+                roughness: 0.1,
+                ior: 2.2,
+                opacity: 0.95, 
+                transparent: true, 
+                emissive: i % 2 === 0 ? 0x550055 : 0x005555,
+                emissiveIntensity: 0.4,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(geo, symMat);
+            if(i === 2 || i === 3) mesh.rotation.x = Math.PI;
+            mesh.scale.set(0.45, 0.45, 0.45);
+            
+            scene.add(mesh);
+            floatingSymbols.push({
+                mesh: mesh,
+                orbitAngle: (Math.PI * 2 / 4) * i,
+                orbitRadius: 6.5,
+                speed: 0.006 + (i * 0.0015),
+                seed: Math.random() * 10
+            });
+        });
+
+        // Rich Cosmic Nebula Particles
+        const particleTex = (() => {
+            const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.2, 'rgba(200,220,255,0.8)'); grad.addColorStop(0.5, 'rgba(255,0,255,0.3)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,64,64);
+            return new THREE.CanvasTexture(canvas);
+        })();
+
+        const pGeo = new THREE.BufferGeometry();
+        const pCount = 5000;
+        const pPos = new Float32Array(pCount * 3);
+        const palette = [0xff00ff, 0x00ffff, 0x8a2be2, 0xff7f00, 0x00ff7f];
+        const pColors = new Float32Array(pCount * 3);
+        
+        for(let i=0; i<pCount*3; i+=3) {
+            const r = 30 + Math.random() * 70; const theta = Math.random() * 2 * Math.PI; const phi = Math.acos(2 * Math.random() - 1);
+            pPos[i] = r * Math.sin(phi) * Math.cos(theta);
+            pPos[i+1] = r * Math.sin(phi) * Math.sin(theta);
+            pPos[i+2] = r * Math.cos(phi);
+            const col = new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
+            pColors[i] = col.r; pColors[i+1] = col.g; pColors[i+2] = col.b;
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pColors, 3));
+        const nebula = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.35, map: particleTex, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+        scene.add(nebula);
+
+        // Interactive Click (Triggers color pulse & glass pings)
+        window.addEventListener('click', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            if(intersects.length > 0) {
+                playGlassPing();
+                bloomPass.strength = 2.4;
+                gsap.to(bloomPass, { strength: 0.8, duration: 1.2 });
+                
+                let hitSym = floatingSymbols.find(s => s.mesh === intersects[0].object || s.mesh.children.includes(intersects[0].object));
+                if(hitSym) {
+                    gsap.to(hitSym.mesh.rotation, { y: hitSym.mesh.rotation.y + Math.PI * 2, duration: 1, ease: "power2.out" });
+                }
+            }
+        });
+
+        // Full 3D Free Roam Controls (Drag to rotate, Scroll/Pinch to zoom XYZ)
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        
+        window.addEventListener('pointerdown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            
+            matryoshkaGroup.rotation.y += deltaX * 0.008;
+            matryoshkaGroup.rotation.x += deltaY * 0.008;
+            coreUniverse.rotation.y -= deltaX * 0.005;
+            
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('pointerup', () => { isDragging = false; });
+
+        window.addEventListener('wheel', (e) => {
+            camera.position.z = Math.max(5, Math.min(45, camera.position.z + e.deltaY * 0.02));
+        }, { passive: true });
+
+        let touchStartDist = 0;
+        window.addEventListener('touchstart', (e) => {
+            if(e.touches.length === 2) {
+                touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            }
+        });
+        window.addEventListener('touchmove', (e) => {
+            if(e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                const diff = touchStartDist - dist;
+                camera.position.z = Math.max(5, Math.min(45, camera.position.z + diff * 0.05));
+                touchStartDist = dist;
+            }
+        });
+
+        const startBtn = document.getElementById('init-btn');
+        const startOverlay = document.getElementById('start-overlay');
+        
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            playGlassPing();
+            gsap.to(startOverlay, { opacity: 0, duration: 1, onComplete: () => {
+                startOverlay.style.display = 'none';
+            }});
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            matryoshkaGroup.rotation.y += 0.003;
+            coreUniverse.rotation.y -= 0.002;
+            nebula.rotation.y += 0.0005;
+
+            bgSpheres.forEach((sph, i) => {
+                sph.rotation.x += 0.003;
+                sph.rotation.y += 0.005;
+                sph.position.y += Math.sin(time * 2 + i) * 0.008;
+            });
+
+            // Fluid Wave Behavior
+            const fPositions = fluidParticles.geometry.attributes.position.array;
+            for(let i = 0; i < fluidCount * 3; i += 3) {
+                const ox = fluidOriginalPositions[i];
+                const oy = fluidOriginalPositions[i+1];
+                const oz = fluidOriginalPositions[i+2];
+                const wave = Math.sin(time * 3 + ox * 2) * 0.08;
+                fPositions[i] = ox + wave;
+                fPositions[i+1] = oy + wave;
+                fPositions[i+2] = oz + wave;
+            }
+            fluidParticles.geometry.attributes.position.needsUpdate = true;
+            fluidParticles.rotation.y += 0.01;
+
+            orbitalLights.forEach((pl, i) => {
+                pl.angle += pl.speed;
+                pl.light.position.x = Math.cos(pl.angle) * pl.radius;
+                pl.light.position.y = Math.sin(time * 0.6 + i) * 3;
+                pl.light.position.z = Math.sin(pl.angle) * pl.radius;
+            });
+
+            // Rotate floating suit symbols (♣️ ♦️ ♠️ ♥️) freely around the center
+            floatingSymbols.forEach((sym) => {
+                sym.orbitAngle += sym.speed;
+                const r = sym.orbitRadius + Math.sin(time + sym.seed) * 0.5;
+                sym.mesh.position.x = Math.cos(sym.orbitAngle) * r;
+                sym.mesh.position.y = Math.sin(time * 1.2 + sym.seed) * 1.5;
+                sym.mesh.position.z = Math.sin(sym.orbitAngle) * r;
+                
+                sym.mesh.rotation.y += 0.02;
+            });
+
+            composer.render();
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
